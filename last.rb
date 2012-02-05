@@ -1,29 +1,15 @@
 require 'sinatra'
 require 'digest/md5'
 require 'faraday'
+require 'faraday_middleware'
 
 enable :sessions
 
-key = '904ad91c2e8da35f16b24510d8c38917'
-secret = '73152c997b0c5880ed5bd22cbbb5aa87'
+key = ENV['LASTFM_KEY']
+secret = ENV['LASTFM_SECRET']
+
 callback = "http://localhost:9393/auth/lastfm/callback"
-
-conn = Faraday.new(:url => 'http://ws.audioscrobbler.com/2.0/') do |builder|
-  builder.use Faraday::Request::UrlEncoded
-  builder.use Faraday::Response::Logger     
-  builder.use Faraday::Adapter::NetHttp
-end
-
-def get_session_key(key, token, signature)
-  response = conn.get("?method=auth.getSession&api_key=#{key}&token=#{token}&api_sig=#{signature}")
-  s = response.body
-end
-
 request_uri = "http://www.last.fm/api/auth/?api_key=#{key}&cb=#{callback}"
-
-def auth_user
-  redirect request_uri
-end
 
 helpers do
   def current_user
@@ -31,15 +17,32 @@ helpers do
   end
 end
 
+def make_signature(key, token, secret)
+  Digest::MD5.hexdigest("api_key#{key}methodauth.getSessiontoken#{token}#{secret}")
+end
+
+def get_session(key, token, signature)
+  conn = Faraday.new(:url => 'http://ws.audioscrobbler.com') do |builder|
+    builder.use Faraday::Request::UrlEncoded
+    builder.use Faraday::Response::Logger     
+    builder.use Faraday::Adapter::NetHttp
+    builder.use Faraday::Response::ParseJson
+  end
+
+  conn.get "/2.0/?method=auth.getSession&api_key=#{key}&token=#{token}&api_sig=#{signature}&format=json"
+end
+
 get '/' do
   erb :index
 end
 
 get '/auth/lastfm/callback' do
-  session["user"] = params[:token]
   token = params[:token]
-  signature = Digest::MD5.hexdigest("api_key#{key}methodauth.getSessiontoken#{token}#{secret}")
-  get_session_key(key, token, signature)
+  signature = make_signature(key, token, secret)
+  response = get_session(key, token, signature)
+  r = response.body
+  session["user"] = r["session"]["name"]
+  session["key"] = r["session"]["key"]
   redirect '/'
 end
 

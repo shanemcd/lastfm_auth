@@ -1,6 +1,7 @@
 <% if current_user %> 
-  <p><a href="/sign_in" >Sign Out</a></p>
-  <p><%= session["user_key"] %></p>
+  <p><a href="/sign_out" >Sign Out</a></p>
+  <p><%= current_user %></p>
+  <p><%= session["key"] %></p>
   <% else %>
   <p><a href="/sign_in" >Sign In</a></p>
 <% end %>
